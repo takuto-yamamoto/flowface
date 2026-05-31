@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<!-- iPhone 16e: 393pt wide, viewport-fit=cover for safe-area -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<!-- PWA / ホーム画面追加 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FlowFace">
+<!-- テーマカラー（Safariのアドレスバー） -->
+<meta name="theme-color" content="#f3f9f5">
+<title>FlowFace</title>
+<style>
+/* =========================================
+   CSS変数 / デザイントークン
+========================================= */
+:root {
+  /* フォント: iOSシステムフォントのみ（外部依存なし） */
+  --f: -apple-system, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
+
+  /* カラー */
+  --g1: #30c880;   /* メイングリーン */
+  --g2: #1b9e5c;   /* ダークグリーン */
+  --g3: #0d6e3c;   /* 最深グリーン */
+  --pale: #e8f8f1;
+  --pale2: #c2e8d3;
+  --W: #ffffff;
+  --ink: #0e1a13;
+  --ink2: #385042;
+  --ink3: #7c9d8c;
+  --line: #d6ece0;
+  --bg: #f3f9f5;
+  --or: #ff6b35;
+  --or-bg: #fff0eb;
+
+  /* 角丸 */
+  --r: 16px;
+  --r-sm: 10px;
+
+  /* シャドウ */
+  --sh: 0 2px 10px rgba(12,70,38,.09);
+  --sh-md: 0 5px 20px rgba(12,70,38,.13);
+
+  /* iPhone 16e Safe Area（フォールバック付き） */
+  --sat: env(safe-area-inset-top, 44px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+
+  /* タップ最小サイズ (Apple HIG推奨 44pt) */
+  --tap: 44px;
+}
+
+/* =========================================
+   リセット
+========================================= */
+*, *::before, *::after {
+  margin: 0; padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+html {
+  height: 100%;
+  /* iOSのバウンススクロール防止 */
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--f);
+  background: var(--bg);
+  color: var(--ink);
+  /* iPhone 16e: 393pt。デスクトップでは中央寄せ */
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  /* 高さ: dvh = Dynamic Viewport Height (iOS Safari対応) */
+  height: 100dvh;
+  overflow: hidden;
+  position: relative;
+  overscroll-behavior: none;
+  /* テキスト拡大防止 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* =========================================
+   スクリーンシステム
+   - 全スクリーンは常にdisplay:flex
+   - 表示/非表示はopacity + pointer-eventsで制御
+   - visibility:hiddenはSafariでレンダリングを
+     スキップさせないためあえて使わない
+========================================= */
+.screen {
+  position: absolute;
+  inset: 0;                    /* top/right/bottom/left: 0 */
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  /* 非表示状態 */
+  opacity: 0;
+  pointer-events: none;
+  /* ナビゲーションバー分の下余白 */
+  padding-bottom: calc(56px + var(--sab));
+}
+.screen::-webkit-scrollbar { display: none; }
+
+/* アクティブスクリーン */
+.screen.active {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+/* トレーニング画面: スクロールなし・下余白なし */
+#s-train {
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+/* =========================================
+   ボトムナビゲーション
+   iPhone 16e: Home Indicator考慮
+========================================= */
+#bnav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  z-index: 50;
+  background: rgba(255,255,255,.96);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border-top: 1px solid var(--line);
+  display: flex;
+  /* Safe Area: Home Indicator */
+  padding: 8px 0 max(var(--sab), 16px);
+}
+#bnav.hide { display: none; }
+
+.nb {
+  flex: 1;
+  min-height: var(--tap);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--f);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink3);
+  /* iOSタップ時フィードバック */
+  -webkit-tap-highlight-color: transparent;
+  transition: color .15s;
+}
+.nb.on { color: var(--g2); }
+.nb svg { width: 24px; height: 24px; stroke-width: 1.8; }
+
+/* =========================================
+   ホーム画面
+========================================= */
+
+/* ヘッダーバー */
+.h-bar {
+  /* ステータスバー高さ + 余白 */
+  padding-top: max(var(--sat), 44px);
+  padding-top: calc(max(var(--sat), 44px) + 10px);
+  padding-left: 18px;
+  padding-right: 18px;
+  padding-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.logo { display: flex; align-items: center; gap: 9px; }
+.logo-ico {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--g1), var(--g3));
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 3px 10px rgba(48,200,128,.35);
+}
+.logo-ico svg { width: 18px; height: 18px; color: #fff; stroke-width: 2.2; }
+.logo-name { font-size: 20px; font-weight: 900; color: var(--ink); letter-spacing: -.3px; }
+.logo-name span { color: var(--g1); }
+
+/* 連続記録バッジ */
+.streak-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--W);
+  border-radius: 99px;
+  padding: 7px 13px;
+  box-shadow: var(--sh);
+  cursor: pointer;
+  min-height: var(--tap);
+}
+.streak-pill .fire { font-size: 16px; line-height: 1; }
+.streak-pill .num  { font-size: 18px; font-weight: 900; color: var(--or); line-height: 1; }
+.streak-pill .lbl  { font-size: 10px; font-weight: 700; color: var(--ink3); }
+
+/* ヒーローカード */
+.hero {
+  margin: 0 16px 14px;
+  flex-shrink: 0;
+  background: linear-gradient(140deg, var(--g1) 0%, var(--g3) 100%);
+  border-radius: var(--r);
+  padding: 22px 20px 20px;
+  box-shadow: var(--sh-md);
+  position: relative;
+  /* overflow:hidden は使わない（コンテンツが消えるバグ防止） */
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  width: 120px; height: 120px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.07);
+  top: -20px; right: -16px;
+  pointer-events: none;
+}
+.hero-eye {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 1.8px; text-transform: uppercase;
+  color: rgba(255,255,255,.6);
+  margin-bottom: 7px;
+}
+.hero-ttl {
+  font-size: 24px; font-weight: 900;
+  color: #fff; line-height: 1.3;
+  margin-bottom: 13px;
+}
+.hero-chips { display: flex; gap: 7px; margin-bottom: 17px; }
+.chip {
+  display: flex; align-items: center; gap: 4px;
+  background: rgba(255,255,255,.18);
+  border-radius: 99px;
+  padding: 4px 10px;
+  font-size: 11px; font-weight: 700;
+  color: rgba(255,255,255,.9);
+}
+.chip svg { width: 11px; height: 11px; stroke-width: 2; }
+
+/* トレーニング開始ボタン */
+.start-btn {
+  position: relative; z-index: 2;   /* hero::after より前面 */
+  width: 100%;
+  min-height: var(--tap);
+  padding: 13px 16px;
+  border: none; border-radius: 12px;
+  background: #fff; color: var(--g2);
+  font-family: var(--f); font-size: 15px; font-weight: 900;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  box-shadow: 0 3px 12px rgba(0,0,0,.14);
+  /* アクティブフィードバック */
+  transition: transform .12s, opacity .12s;
+}
+.start-btn:active { transform: scale(.97); opacity: .88; }
+.start-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+/* 音楽カード */
+.music-card {
+  margin: 0 16px 14px;
+  flex-shrink: 0;
+  background: var(--W);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  box-shadow: var(--sh);
+  display: flex; align-items: center; gap: 11px;
+}
+.music-ico {
+  width: 42px; height: 42px;
+  border-radius: 11px; flex-shrink: 0;
+  background: linear-gradient(135deg, #5b5ea6, #7b2d8b);
+  display: flex; align-items: center; justify-content: center;
+}
+.music-ico svg { width: 19px; height: 19px; color: #fff; stroke-width: 1.8; }
+.music-info { flex: 1; min-width: 0; }
+.music-nm {
+  font-size: 13px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.music-meta { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+.music-pick {
+  flex-shrink: 0;
+  min-height: var(--tap); min-width: var(--tap);
+  background: var(--pale); border: none; border-radius: 9px;
+  padding: 0 13px;
+  font-size: 12px; font-weight: 700; color: var(--g2);
+  cursor: pointer; font-family: var(--f);
+  display: flex; align-items: center;
+  transition: background .12s;
+}
+.music-pick:active { background: var(--pale2); }
+#music-file-input { display: none; }
+
+/* ステップ一覧 */
+.sec-lbl {
+  padding: 0 16px 8px;
+  flex-shrink: 0;
+  font-size: 10px; font-weight: 700;
+  color: var(--ink3);
+  letter-spacing: 1.5px; text-transform: uppercase;
+}
+.steps-list { padding: 0 16px; display: flex; flex-direction: column; gap: 7px; }
+.step-row {
+  background: var(--W); border-radius: var(--r-sm);
+  padding: 11px 12px;
+  display: flex; align-items: center; gap: 11px;
+  box-shadow: var(--sh); flex-shrink: 0;
+  min-height: var(--tap);
+}
+.step-badge {
+  width: 28px; height: 28px;
+  border-radius: 8px; flex-shrink: 0;
+  background: var(--pale); color: var(--g1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 900;
+}
+.step-nm  { font-size: 13px; font-weight: 700; }
+.step-dur { font-size: 10px; color: var(--ink3); margin-top: 1px; }
+.step-arr { margin-left: auto; color: var(--line); }
+.step-arr svg { width: 13px; height: 13px; stroke-width: 2; }
+
+/* =========================================
+   トレーニング画面
+========================================= */
+.tr-top {
+  padding-top: calc(max(var(--sat), 44px) + 10px);
+  padding-left: 16px; padding-right: 16px; padding-bottom: 10px;
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+}
+.tr-back {
+  width: var(--tap); height: var(--tap);
+  border-radius: 12px; flex-shrink: 0;
+  background: var(--W); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--sh); color: var(--ink2);
+  transition: opacity .12s;
+}
+.tr-back:active { opacity: .7; }
+.tr-back svg { width: 17px; height: 17px; stroke-width: 2.5; }
+.tr-lbl { font-size: 15px; font-weight: 900; color: var(--ink); }
+.tr-cnt { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--ink3); }
+
+/* プログレスドット */
+.tr-dots { padding: 0 16px 12px; display: flex; gap: 4px; flex-shrink: 0; }
+.dot { flex: 1; height: 4px; border-radius: 2px; background: var(--line); transition: background .25s; }
+.dot.done { background: var(--pale2); }
+.dot.cur  { background: var(--g1); }
+
+/* 中央コンテンツ */
+.tr-body {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 0 16px;
+  gap: 14px;
+}
+
+.phase-tag {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 5px 14px; border-radius: 99px;
+  flex-shrink: 0;
+}
+.phase-tag.ex   { background: var(--pale);  color: var(--g2); }
+.phase-tag.rest { background: var(--or-bg); color: var(--or); }
+
+.ex-title {
+  font-size: 24px; font-weight: 900;
+  color: var(--ink); text-align: center;
+  line-height: 1.3; flex-shrink: 0;
+}
+
+/* リングタイマー
+   iPhone 16e: 393pt幅、タイマーは画面の約52% */
+.ring-wrap {
+  position: relative;
+  width: min(200px, 52vw);
+  height: min(200px, 52vw);
+  flex-shrink: 0;
+}
+.ring-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-track { fill: none; stroke: var(--line); stroke-width: 10; }
+.ring-arc {
+  fill: none; stroke: var(--g1); stroke-width: 10; stroke-linecap: round;
+  /* 滑らかな減算アニメーション */
+  transition: stroke-dashoffset .92s linear, stroke .3s;
+}
+.ring-arc.rest { stroke: var(--or); }
+.ring-inner {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.ring-sec  { font-size: 60px; font-weight: 900; color: var(--ink); line-height: 1; }
+.ring-unit { font-size: 11px; font-weight: 700; color: var(--ink3); margin-top: 2px; }
+
+/* 次のエクササイズカード */
+.next-card {
+  width: 100%; background: var(--W); border-radius: var(--r-sm);
+  padding: 11px 13px;
+  display: flex; align-items: center; gap: 9px;
+  box-shadow: var(--sh); flex-shrink: 0;
+  min-height: var(--tap);
+}
+.next-lbl  { font-size: 10px; font-weight: 700; color: var(--ink3); letter-spacing: 1px; text-transform: uppercase; }
+.next-nm   { font-size: 14px; font-weight: 700; color: var(--ink); margin-top: 2px; }
+.next-arr  { margin-left: auto; color: var(--line); }
+.next-arr svg { width: 15px; height: 15px; stroke-width: 2; }
+
+/* コントロール */
+.tr-ctrl {
+  padding: 12px 16px;
+  padding-bottom: max(20px, var(--sab));
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  flex-shrink: 0;
+}
+.ctrl-sm {
+  width: var(--tap); height: var(--tap); min-width: 44px;
+  border-radius: 14px;
+  background: var(--W); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--sh); color: var(--ink2);
+  transition: opacity .12s, transform .12s;
+}
+.ctrl-sm:active { opacity: .7; transform: scale(.93); }
+.ctrl-sm svg { width: 19px; height: 19px; stroke-width: 2.2; }
+
+.ctrl-play {
+  width: 64px; height: 64px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--g1), var(--g3));
+  border: none; cursor: pointer; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 5px 18px rgba(48,200,128,.4);
+  transition: opacity .12s, transform .12s;
+}
+.ctrl-play:active { opacity: .8; transform: scale(.93); }
+.ctrl-play svg { width: 22px; height: 22px; }
+
+/* =========================================
+   カレンダー画面
+========================================= */
+.cal-hd {
+  padding-top: calc(max(var(--sat), 44px) + 10px);
+  padding-left: 16px; padding-right: 16px; padding-bottom: 16px;
+  flex-shrink: 0;
+}
+.cal-hd h1 { font-size: 24px; font-weight: 900; color: var(--ink); }
+.cal-hd p  { font-size: 12px; color: var(--ink3); margin-top: 3px; }
+
+.stat-row { display: flex; gap: 9px; padding: 0 16px 14px; flex-shrink: 0; }
+.stat-box {
+  flex: 1; background: var(--W); border-radius: var(--r-sm);
+  padding: 12px 8px; text-align: center; box-shadow: var(--sh);
+}
+.stat-v { font-size: 26px; font-weight: 900; line-height: 1; margin-bottom: 3px; }
+.stat-v.g { color: var(--g1); }
+.stat-v.o { color: var(--or); }
+.stat-l { font-size: 10px; font-weight: 700; color: var(--ink3); }
+
+.cal-card {
+  margin: 0 16px; background: var(--W);
+  border-radius: var(--r); padding: 15px;
+  box-shadow: var(--sh); flex-shrink: 0;
+}
+.cal-nav-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.cal-nav-btn {
+  min-width: var(--tap); min-height: var(--tap);
+  background: none; border: none; cursor: pointer;
+  color: var(--ink3);
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity .12s;
+}
+.cal-nav-btn:active { opacity: .6; }
+.cal-nav-btn svg { width: 17px; height: 17px; stroke-width: 2.5; }
+.cal-mth { font-size: 16px; font-weight: 900; color: var(--ink); }
+
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-wd { text-align: center; font-size: 10px; font-weight: 700; color: var(--ink3); padding: 3px 0; }
+.cal-d {
+  aspect-ratio: 1; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 500; color: var(--ink2);
+}
+.cal-d.done  { background: var(--g1); color: #fff; font-weight: 700; }
+.cal-d.today { border: 2px solid var(--g1); color: var(--g1); font-weight: 700; }
+.cal-d.done.today { border-color: var(--g3); }
+
+/* =========================================
+   オーバーレイ
+   position:fixed + z-index:200
+   → スクリーン・ナビより必ず前面
+========================================= */
+.overlay {
+  position: fixed;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 100%; max-width: 430px;
+  height: 100dvh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 200;
+  /* 非表示 */
+  visibility: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .18s;
+}
+.overlay.show {
+  visibility: visible;
+  pointer-events: auto;
+  opacity: 1;
+}
+
+/* カウントダウン */
+#ov-cd { background: rgba(243,249,245,.97); }
+.cd-num {
+  font-size: 108px; font-weight: 900;
+  color: var(--g1); line-height: 1;
+  /* 数字が変わるたびに軽くスケール */
+  transition: transform .1s;
+}
+.cd-hint { font-size: 15px; font-weight: 700; color: var(--ink3); margin-top: 10px; }
+
+/* 完了 */
+#ov-done {
+  background: linear-gradient(160deg, #eaf8f1, #dff3e9);
+  padding: 28px 20px;
+}
+.done-em  { font-size: 60px; margin-bottom: 12px; }
+.done-ttl { font-size: 28px; font-weight: 900; color: var(--ink); margin-bottom: 6px; }
+.done-sub { font-size: 13px; color: var(--ink3); text-align: center; line-height: 1.7; margin-bottom: 22px; }
+.done-stats { display: flex; gap: 12px; width: 100%; margin-bottom: 22px; }
+.done-stat  {
+  flex: 1; background: var(--W); border-radius: var(--r-sm);
+  padding: 13px 8px; text-align: center; box-shadow: var(--sh);
+}
+.done-sv { font-size: 28px; font-weight: 900; color: var(--g1); }
+.done-sl { font-size: 10px; font-weight: 700; color: var(--ink3); margin-top: 3px; }
+.done-home {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 13px 16px;
+  border: none; border-radius: 12px;
+  background: linear-gradient(135deg, var(--g1), var(--g3));
+  color: #fff; font-family: var(--f); font-size: 15px; font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 5px 18px rgba(48,200,128,.3);
+  transition: opacity .12s;
+}
+.done-home:active { opacity: .85; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     ホーム画面
+============================================================ -->
+<div id="s-home" class="screen active">
+
+  <div class="h-bar">
+    <div class="logo">
+      <div class="logo-ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="8" r="4.5"/>
+          <path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6"/>
+        </svg>
+      </div>
+      <div class="logo-name">Flow<span>Face</span></div>
+    </div>
+    <button class="streak-pill" onclick="goTo('calendar')" aria-label="カレンダーを開く">
+      <span class="fire">🔥</span>
+      <span class="num" id="home-streak">0</span>
+      <span class="lbl">連続日</span>
+    </button>
+  </div>
+
+  <!-- ヒーロー（開始ボタン含む） -->
+  <div class="hero">
+    <div class="hero-eye">Today's Training</div>
+    <div class="hero-ttl">フェイスライン<br>トレーニング</div>
+    <div class="hero-chips">
+      <div class="chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+        </svg>
+        約11分
+      </div>
+      <div class="chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/>
+        </svg>
+        9ステップ
+      </div>
+    </div>
+    <button class="start-btn" onclick="startTraining()" aria-label="トレーニングを開始する">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <polygon points="5,3 19,12 5,21"/>
+      </svg>
+      トレーニング開始
+    </button>
+  </div>
+
+  <!-- 音楽カード -->
+  <div class="music-card">
+    <div class="music-ico">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M9 18V5l12-2v13"/>
+        <circle cx="6" cy="18" r="3"/>
+        <circle cx="18" cy="16" r="3"/>
+      </svg>
+    </div>
+    <div class="music-info">
+      <div class="music-nm" id="music-name">音楽未選択</div>
+      <div class="music-meta" id="music-meta">MP3ファイルを選択してください</div>
+    </div>
+    <button class="music-pick" onclick="pickMusic()" aria-label="音楽ファイルを選択">選択</button>
+  </div>
+  <input type="file" id="music-file-input" accept="audio/*" aria-hidden="true">
+
+  <!-- ステップ一覧 -->
+  <div class="sec-lbl">トレーニング一覧</div>
+  <div class="steps-list" id="steps-list"></div>
+  <div style="height:12px; flex-shrink:0;"></div>
+
+</div><!-- /s-home -->
+
+
+<!-- ============================================================
+     トレーニング画面
+============================================================ -->
+<div id="s-train" class="screen">
+
+  <div class="tr-top">
+    <button class="tr-back" onclick="stopTraining()" aria-label="ホームに戻る">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M15 18l-6-6 6-6"/>
+      </svg>
+    </button>
+    <span class="tr-lbl" id="tr-lbl">トレーニング中</span>
+    <span class="tr-cnt" id="tr-cnt">1 / 9</span>
+  </div>
+
+  <div class="tr-dots" id="tr-dots"></div>
+
+  <div class="tr-body">
+    <div class="phase-tag ex" id="phase-tag">トレーニング</div>
+    <div class="ex-title" id="ex-title">いういうトレーニング</div>
+
+    <!-- リングタイマー (r=82, circumference≈515.2) -->
+    <div class="ring-wrap">
+      <svg class="ring-svg" viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="ring-track" cx="100" cy="100" r="82"/>
+        <circle class="ring-arc" id="ring-arc" cx="100" cy="100" r="82"
+                style="stroke-dasharray:515.2; stroke-dashoffset:0;"/>
+      </svg>
+      <div class="ring-inner" aria-live="polite" aria-atomic="true">
+        <div class="ring-sec"  id="ring-sec">60</div>
+        <div class="ring-unit">秒</div>
+      </div>
+    </div>
+
+    <!-- 次のエクササイズ -->
+    <div class="next-card" id="next-card">
+      <div>
+        <div class="next-lbl">Next</div>
+        <div class="next-nm" id="next-nm">おうおうトレーニング</div>
+      </div>
+      <div class="next-arr">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 6l6 6-6 6"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- コントロール -->
+  <div class="tr-ctrl">
+    <button class="ctrl-sm" onclick="skipBack()" aria-label="前のステップへ">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M19 20L9 12l10-8v16z"/><line x1="5" y1="4" x2="5" y2="20"/>
+      </svg>
+    </button>
+    <button class="ctrl-play" id="ctrl-play" onclick="togglePause()" aria-label="一時停止/再開">
+      <svg id="ico-pause" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="5" y="4" width="4" height="16" rx="1"/>
+        <rect x="15" y="4" width="4" height="16" rx="1"/>
+      </svg>
+      <svg id="ico-play" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+        <polygon points="6,3 20,12 6,21"/>
+      </svg>
+    </button>
+    <button class="ctrl-sm" onclick="skipFwd()" aria-label="次のステップへ">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M5 4l10 8-10 8V4z"/><line x1="19" y1="4" x2="19" y2="20"/>
+      </svg>
+    </button>
+  </div>
+
+</div><!-- /s-train -->
+
+
+<!-- ============================================================
+     カレンダー画面
+============================================================ -->
+<div id="s-calendar" class="screen">
+
+  <div class="cal-hd">
+    <h1>📅 記録カレンダー</h1>
+    <p>継続は力なり。あなたの軌跡を振り返ろう。</p>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-box">
+      <div class="stat-v g" id="cal-streak">0</div>
+      <div class="stat-l">🔥 連続日数</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-v o" id="cal-best">0</div>
+      <div class="stat-l">🏆 最高記録</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-v g" id="cal-total">0</div>
+      <div class="stat-l">✅ 総日数</div>
+    </div>
+  </div>
+
+  <div class="cal-card">
+    <div class="cal-nav-row">
+      <button class="cal-nav-btn" onclick="calShift(-1)" aria-label="前の月">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="cal-mth" id="cal-mth-lbl" aria-live="polite"></span>
+      <button class="cal-nav-btn" onclick="calShift(1)" aria-label="次の月">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+    <div class="cal-grid" style="margin-bottom:4px;">
+      <div class="cal-wd">日</div><div class="cal-wd">月</div>
+      <div class="cal-wd">火</div><div class="cal-wd">水</div>
+      <div class="cal-wd">木</div><div class="cal-wd">金</div>
+      <div class="cal-wd">土</div>
+    </div>
+    <div class="cal-grid" id="cal-days"></div>
+  </div>
+  <div style="height:12px; flex-shrink:0;"></div>
+
+</div><!-- /s-calendar -->
+
+
+<!-- ============================================================
+     ボトムナビゲーション
+============================================================ -->
+<nav id="bnav" role="navigation" aria-label="メインナビゲーション">
+  <button class="nb on" id="nb-home" onclick="goTo('home')" aria-label="ホーム">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+      <polyline points="9,22 9,12 15,12 15,22"/>
+    </svg>
+    ホーム
+  </button>
+  <button class="nb" id="nb-calendar" onclick="goTo('calendar')" aria-label="カレンダー">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <rect x="3" y="4" width="18" height="18" rx="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+    カレンダー
+  </button>
+</nav>
+
+
+<!-- ============================================================
+     オーバーレイ: カウントダウン
+============================================================ -->
+<div class="overlay" id="ov-cd" role="dialog" aria-modal="true" aria-label="カウントダウン">
+  <div class="cd-num" id="cd-num">3</div>
+  <div class="cd-hint">準備してください</div>
+</div>
+
+
+<!-- ============================================================
+     オーバーレイ: 完了
+============================================================ -->
+<div class="overlay" id="ov-done" role="dialog" aria-modal="true" aria-label="トレーニング完了">
+  <div class="done-em">🎉</div>
+  <div class="done-ttl">コンプリート！</div>
+  <div class="done-sub">お疲れ様でした！<br>今日もフェイスラインを鍛えました。</div>
+  <div class="done-stats">
+    <div class="done-stat">
+      <div class="done-sv" id="done-streak">0</div>
+      <div class="done-sl">🔥 連続日数</div>
+    </div>
+    <div class="done-stat">
+      <div class="done-sv" id="done-best">0</div>
+      <div class="done-sl">🏆 最高記録</div>
+    </div>
+  </div>
+  <button class="done-home" onclick="finishComplete()">ホームに戻る</button>
+</div>
+
+
+<!-- ============================================================
+     JavaScript
+============================================================ -->
+<script>
+(function () {
+'use strict';
+
+/* ─── 定数 ─────────────────────────────── */
+const STEPS = [
+  'いういうトレーニング',
+  'おうおうトレーニング',
+  'ベロ回し',
+  'アヒル口正面首伸ばし',
+  'アヒル口右首伸ばし',
+  'アヒル口左首伸ばし',
+  '顎ライン首ライン摘み',
+  'ほほ猫の手グリグリ',
+  '両手回し',
+];
+const EX_DUR   = 60;             // エクササイズ秒数
+const REST_DUR = 10;             // 休憩秒数
+const CIRC     = 2 * Math.PI * 82; // r=82 → ≈515.2
+
+/* ─── ストレージキー ──────────────────── */
+const K_REC  = 'ff_records';    // string[] "YYYY-MM-DD"
+const K_POS  = 'ff_music_pos';  // number (seconds)
+const K_NAME = 'ff_music_name'; // string
+
+/* ─── ユーティリティ ──────────────────── */
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+
+/* ─── 記録管理 ───────────────────────── */
+function getRecords() {
+  try { return JSON.parse(localStorage.getItem(K_REC)) || []; }
+  catch { return []; }
+}
+function saveRecords(r) {
+  localStorage.setItem(K_REC, JSON.stringify(r));
+}
+function recordToday() {
+  const r = getRecords(), t = todayStr();
+  if (!r.includes(t)) { r.push(t); saveRecords(r); }
+}
+
+function calcStreak() {
+  const rec = getRecords();
+  if (!rec.length) return 0;
+  let s = 0;
+  const d = new Date(); d.setHours(0,0,0,0);
+  for (;;) {
+    const k = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    if (rec.includes(k)) { s++; d.setDate(d.getDate() - 1); }
+    else break;
+  }
+  return s;
+}
+
+function calcBest() {
+  const rec = getRecords().slice().sort(); // コピーしてソート
+  if (!rec.length) return 0;
+  let best = 1, cur = 1;
+  for (let i = 1; i < rec.length; i++) {
+    const diff = (new Date(rec[i]) - new Date(rec[i-1])) / 86400000;
+    if (diff === 1) { cur++; if (cur > best) best = cur; }
+    else cur = 1;
+  }
+  return best;
+}
+
+/* ─── 画面遷移 ──────────────────────── */
+function goTo(id) {
+  // スクリーン切り替え
+  ['home', 'train', 'calendar'].forEach(s => {
+    const screenId = s === 'home' ? 's-home' : s === 'train' ? 's-train' : 's-calendar';
+    const navId    = s === 'train' ? null : `nb-${s}`;
+    document.getElementById(screenId)
+      .classList.toggle('active', s === id || (id === 'training' && s === 'train'));
+  });
+
+  // ナビバー: トレーニング中は非表示
+  document.getElementById('bnav').classList.toggle('hide', id === 'training');
+
+  // タブハイライト
+  document.querySelectorAll('.nb').forEach(b => b.classList.remove('on'));
+  const tab = document.getElementById('nb-' + id);
+  if (tab) tab.classList.add('on');
+
+  // サイドエフェクト
+  if (id === 'calendar') renderCalendar();
+  if (id === 'home')     document.getElementById('home-streak').textContent = calcStreak();
+}
+
+/* ─── ホーム: ステップリスト描画 ────── */
+function renderStepList() {
+  document.getElementById('steps-list').innerHTML = STEPS.map((name, i) => `
+    <div class="step-row">
+      <div class="step-badge">${i + 1}</div>
+      <div>
+        <div class="step-nm">${name}</div>
+        <div class="step-dur">60秒</div>
+      </div>
+      <div class="step-arr">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+          <path d="M9 6l6 6-6 6"/>
+        </svg>
+      </div>
+    </div>`
+  ).join('');
+}
+
+/* ─── 音楽 ──────────────────────────── */
+let musicEl   = null;
+let duckTimer = null;
+let posTimer  = null;
+
+document.getElementById('music-file-input').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  // 新ファイル→ 位置リセット
+  localStorage.setItem(K_NAME, file.name);
+  localStorage.removeItem(K_POS);
+
+  // UI更新
+  document.getElementById('music-name').textContent = file.name;
+  document.getElementById('music-meta').textContent = 'トレーニング中に再生';
+
+  // 前のオブジェクトURLを解放
+  if (musicEl) {
+    musicEl.pause();
+    URL.revokeObjectURL(musicEl.src);
+    clearInterval(posTimer);
+  }
+
+  musicEl = new Audio(URL.createObjectURL(file));
+  musicEl.volume = 0.65;
+
+  // 再生終了時: 位置をリセット
+  musicEl.addEventListener('ended', () => {
+    localStorage.removeItem(K_POS);
+    clearInterval(posTimer);
+  });
+
+  // 3秒ごとに位置保存（timeupdate は毎秒発火しすぎるため間引く）
+  posTimer = setInterval(() => {
+    if (musicEl && !musicEl.paused) {
+      localStorage.setItem(K_POS, musicEl.currentTime);
+    }
+  }, 3000);
+});
+
+function restoreMusicPosition() {
+  if (!musicEl) return;
+  const pos = parseFloat(localStorage.getItem(K_POS) || '0');
+  if (pos > 0) musicEl.currentTime = pos;
+}
+
+function updateMusicMeta() {
+  const pos = parseFloat(localStorage.getItem(K_POS) || '0');
+  const el  = document.getElementById('music-meta');
+  if (pos > 0) {
+    el.textContent = `続きから再生（${Math.floor(pos / 60)}:${pad2(Math.floor(pos % 60))}）`;
+  } else {
+    el.textContent = 'トレーニング中に再生';
+  }
+}
+
+function pickMusic() { document.getElementById('music-file-input').click(); }
+function playMusic()  { if (musicEl && musicEl.paused)  musicEl.play().catch(() => {}); }
+function pauseMusic() { if (musicEl && !musicEl.paused) musicEl.pause(); }
+
+// ダッキング: 音声ガイド中に音楽を下げる
+function duck() {
+  if (!musicEl) return;
+  clearTimeout(duckTimer);
+  musicEl.volume = 0.07;
+}
+function unduck() {
+  if (!musicEl) return;
+  duckTimer = setTimeout(() => { if (musicEl) musicEl.volume = 0.65; }, 600);
+}
+
+/* ─── TTS音声ガイド ──────────────────── */
+let ttsVoice = null, ttsLoaded = false;
+
+function loadVoice() {
+  if (ttsLoaded) return;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return;
+  // 日本語女性音声を優先
+  ttsVoice =
+    voices.find(v => v.lang.startsWith('ja') &&
+      (v.name.includes('Kyoko') || v.name.includes('O-ren') ||
+       v.name.includes('Female') || v.name.includes('女'))) ||
+    voices.find(v => v.lang.startsWith('ja')) ||
+    null;
+  ttsLoaded = true;
+}
+
+if ('speechSynthesis' in window) {
+  loadVoice();
+  window.speechSynthesis.onvoiceschanged = loadVoice;
+}
+
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang  = 'ja-JP';
+  utt.rate  = 0.88;
+  utt.pitch = 1.1;
+  loadVoice();
+  if (ttsVoice) utt.voice = ttsVoice;
+  utt.onstart = duck;
+  utt.onend   = unduck;
+  utt.onerror = unduck;
+  window.speechSynthesis.speak(utt);
+}
+
+/* ─── トレーニングエンジン ───────────── */
+let stepIdx   = 0;
+let timeLeft  = 0;
+let inRest    = false;
+let isPaused  = false;
+let ticker    = null;
+let isRunning = false;
+
+function startTraining() {
+  // 前回セッションのクリーンアップ
+  clearInterval(ticker); ticker = null;
+  window.speechSynthesis.cancel();
+
+  stepIdx   = 0;
+  inRest    = false;
+  isPaused  = false;
+  isRunning = true;
+
+  setPauseIcon(true);      // ❚❚ 表示（実行中）
+
+  // トレーニング画面へ
+  ['s-home','s-train','s-calendar'].forEach(id => {
+    document.getElementById(id).classList.toggle('active', id === 's-train');
+  });
+  document.getElementById('bnav').classList.add('hide');
+
+  buildDots();
+  runCountdown();
+}
+
+function runCountdown() {
+  const ov    = document.getElementById('ov-cd');
+  const numEl = document.getElementById('cd-num');
+  let c = 3;
+  numEl.textContent = c;
+  ov.classList.add('show');
+  speak('準備してください。3、2、1、スタート！');
+  const iv = setInterval(() => {
+    c--;
+    if (c <= 0) {
+      clearInterval(iv);
+      ov.classList.remove('show');
+      beginExercise(0);
+    } else {
+      numEl.textContent = c;
+    }
+  }, 1000);
+}
+
+function beginExercise(idx) {
+  if (!isRunning) return;
+  stepIdx  = idx;
+  inRest   = false;
+  timeLeft = EX_DUR;
+  refreshUI();
+  speak(`${STEPS[idx]}、スタート！`);
+  // 音楽: 再生位置を復元してから再生
+  restoreMusicPosition();
+  playMusic();
+  startTick();
+}
+
+function beginRest(nextIdx) {
+  if (!isRunning) return;
+  inRest   = true;
+  timeLeft = REST_DUR;
+  refreshUI();
+  speak(`フィニッシュ！次は『${STEPS[nextIdx]}』です。準備してください。`);
+  startTick();
+}
+
+function startTick() {
+  clearInterval(ticker);
+  ticker = setInterval(() => {
+    if (isPaused || !isRunning) return;
+    timeLeft--;
+    refreshRing();
+    if (!inRest && timeLeft === 3) speak('あと3秒！');
+    if (timeLeft <= 0) {
+      clearInterval(ticker);
+      onPhaseEnd();
+    }
+  }, 1000);
+}
+
+function onPhaseEnd() {
+  if (inRest) {
+    beginExercise(stepIdx + 1);
+    return;
+  }
+  const next = stepIdx + 1;
+  if (next >= STEPS.length) finishAll();
+  else beginRest(next);
+}
+
+function finishAll() {
+  isRunning = false;
+  clearInterval(ticker);
+  pauseMusic();
+  recordToday();
+  document.getElementById('done-streak').textContent = calcStreak();
+  document.getElementById('done-best').textContent   = calcBest();
+  speak('コンプリート！お疲れ様でした！');
+  setTimeout(() => document.getElementById('ov-done').classList.add('show'), 1200);
+}
+
+function finishComplete() {
+  document.getElementById('ov-done').classList.remove('show');
+  goTo('home');
+}
+
+function stopTraining() {
+  isRunning = false;
+  clearInterval(ticker);
+  window.speechSynthesis.cancel();
+  pauseMusic();
+  document.getElementById('ov-cd').classList.remove('show');
+  document.getElementById('ov-done').classList.remove('show');
+  goTo('home');
+}
+
+function togglePause() {
+  isPaused = !isPaused;
+  setPauseIcon(!isPaused);
+  if (isPaused) { pauseMusic(); speak('一時停止中'); }
+  else          { playMusic();  speak('再開します'); }
+}
+
+function skipFwd() {
+  clearInterval(ticker);
+  const next = stepIdx + 1;
+  if (inRest) {
+    if (next >= STEPS.length) { finishAll(); return; }
+    beginExercise(next);
+  } else {
+    if (next >= STEPS.length) { finishAll(); return; }
+    beginRest(next);
+  }
+}
+
+function skipBack() {
+  clearInterval(ticker);
+  // 休憩中 → 直前のエクササイズを再スタート
+  // エクササイズ中 → 1つ前のエクササイズへ
+  if (inRest) beginExercise(stepIdx);
+  else        beginExercise(Math.max(0, stepIdx - 1));
+}
+
+function setPauseIcon(running) {
+  document.getElementById('ico-pause').style.display = running ? 'block' : 'none';
+  document.getElementById('ico-play').style.display  = running ? 'none'  : 'block';
+}
+
+/* ─── トレーニングUI更新 ────────────── */
+function refreshUI() {
+  document.getElementById('tr-lbl').textContent  = inRest ? '休憩' : 'トレーニング中';
+  document.getElementById('tr-cnt').textContent  = `${stepIdx + 1} / ${STEPS.length}`;
+  document.getElementById('ex-title').textContent = inRest ? '休憩' : STEPS[stepIdx];
+
+  const pt = document.getElementById('phase-tag');
+  pt.textContent = inRest ? '休憩' : 'トレーニング';
+  pt.className   = 'phase-tag ' + (inRest ? 'rest' : 'ex');
+
+  document.getElementById('ring-arc').classList.toggle('rest', inRest);
+
+  const nc = document.getElementById('next-card');
+  const nxt = STEPS[stepIdx + 1];
+  if (nxt) {
+    document.getElementById('next-nm').textContent = nxt;
+    nc.style.display = 'flex';
+  } else {
+    nc.style.display = 'none';
+  }
+
+  refreshRing();
+  buildDots();
+}
+
+function refreshRing() {
+  const total  = inRest ? REST_DUR : EX_DUR;
+  const offset = CIRC * (1 - timeLeft / total);
+  const arc    = document.getElementById('ring-arc');
+  arc.style.strokeDasharray  = CIRC;
+  arc.style.strokeDashoffset = offset;
+  document.getElementById('ring-sec').textContent = timeLeft;
+}
+
+function buildDots() {
+  document.getElementById('tr-dots').innerHTML = STEPS.map((_, i) => {
+    const cls = i < stepIdx ? ' done' : i === stepIdx ? ' cur' : '';
+    return `<div class="dot${cls}"></div>`;
+  }).join('');
+}
+
+/* ─── カレンダー ─────────────────────── */
+let calDate = new Date();
+
+function renderCalendar() {
+  const rec = getRecords();
+  document.getElementById('cal-streak').textContent = calcStreak();
+  document.getElementById('cal-best').textContent   = calcBest();
+  document.getElementById('cal-total').textContent  = rec.length;
+
+  const y = calDate.getFullYear();
+  const m = calDate.getMonth();
+  document.getElementById('cal-mth-lbl').textContent = `${y}年${m + 1}月`;
+
+  const first = new Date(y, m, 1).getDay();
+  const days  = new Date(y, m + 1, 0).getDate();
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  let html = '';
+  for (let i = 0; i < first; i++) html += '<div></div>';
+  for (let d = 1; d <= days; d++) {
+    const ds   = `${y}-${pad2(m+1)}-${pad2(d)}`;
+    const done = rec.includes(ds);
+    const isT  = new Date(y, m, d).getTime() === today.getTime();
+    let cls = 'cal-d';
+    if (done) cls += ' done';
+    if (isT)  cls += ' today';
+    html += `<div class="${cls}">${d}</div>`;
+  }
+  document.getElementById('cal-days').innerHTML = html;
+}
+
+function calShift(n) {
+  calDate.setMonth(calDate.getMonth() + n);
+  renderCalendar();
+}
+
+/* ─── 初期化 ─────────────────────────── */
+function init() {
+  renderStepList();
+  document.getElementById('home-streak').textContent = calcStreak();
+
+  const savedName = localStorage.getItem(K_NAME);
+  if (savedName) {
+    document.getElementById('music-name').textContent = savedName;
+    updateMusicMeta();
+  }
+}
+init();
+
+/* ─── グローバル公開（inlineイベント用） */
+Object.assign(window, {
+  goTo, startTraining, stopTraining,
+  togglePause, skipFwd, skipBack,
+  finishComplete, pickMusic, calShift,
+});
+
+})();
+</script>
+</body>
+</html>
