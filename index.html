@@ -502,9 +502,9 @@ body {
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; font-weight: 500; color: var(--ink2);
 }
-.cal-d.done  { background: var(--g1); color: #fff; font-weight: 700; }
+.cal-d.done  { background: var(--pale2); color: var(--g3); font-weight: 700; }
 .cal-d.today { border: 2px solid var(--g1); color: var(--g1); font-weight: 700; }
-.cal-d.done.today { border-color: var(--g3); }
+.cal-d.done.today { background: var(--pale2); border-color: var(--g2); color: var(--g3); }
 
 /* =========================================
    オーバーレイ
@@ -533,7 +533,7 @@ body {
 }
 
 /* カウントダウン */
-#ov-cd { background: rgba(243,249,245,.97); }
+#ov-cd { background: #f3f9f5; }
 .cd-num {
   font-size: 108px; font-weight: 900;
   color: var(--g1); line-height: 1;
