@@ -1316,7 +1316,9 @@ function refreshUI() {
   document.getElementById('ring-arc').classList.toggle('rest', inRest);
 
   const nc = document.getElementById('next-card');
-  const nxt = STEPS[stepIdx + 1];
+  // 休憩中は stepIdx 自体が「次に始まる種目」を指しているため、
+  // 運動中(stepIdx+1)と休憩中(stepIdx)で参照先を切り替える
+  const nxt = inRest ? STEPS[stepIdx] : STEPS[stepIdx + 1];
   if (nxt) {
     document.getElementById('next-nm').textContent = nxt;
     nc.style.display = 'flex';
